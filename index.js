@@ -5,12 +5,12 @@ import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
 import crypto from 'crypto';
+import cors from 'cors';
 
 dotenv.config();
-
 const app = express();
+app.use(cors());
 const PORT = process.env.PORT || 3000;
-
 app.use(express.json());
 
 // Set up a database connection
@@ -83,7 +83,7 @@ app.post('/register', async (req, res) => {
     );
 
     // Send verification email
-    const verificationLink = `${process.env.FRONTEND_URL}/verify?token=${verificationToken}`;
+    const verificationLink = `${process.env.FRONTEND_URL}verify?token=${verificationToken}`;
     await transporter.sendMail({
       from: process.env.SMTP_USER,
       to: email,
@@ -98,6 +98,37 @@ app.post('/register', async (req, res) => {
     } else {
       res.status(500).json({ message: 'Internal server error.' });
     }
+  }
+});
+
+// Verify user email
+app.get('/verify', async (req, res) => {
+  const { token } = req.query;
+
+  if (!token) {
+    return res.status(400).json({ message: 'Verification token is required.' });
+  }
+
+  try {
+    // Check if the token exists and is valid
+    const [result] = await db.execute(
+      'SELECT id FROM users WHERE verification_token = ? AND is_verified = 0',
+      [token]
+    );
+
+    if (result.length === 0) {
+      return res.status(400).json({ message: 'Invalid or expired verification token.' });
+    }
+
+    // Update the user's status to verified
+    await db.execute('UPDATE users SET is_verified = 1, verification_token = NULL WHERE id = ?', [
+      result[0].id,
+    ]);
+
+    res.status(200).json({ message: 'Email verified successfully. You can now log in.' });
+  } catch (error) {
+    console.error('Verification error:', error);
+    res.status(500).json({ message: 'Internal server error.' });
   }
 });
 
@@ -120,7 +151,36 @@ app.post('/login', async (req, res) => {
     expiresIn: '1h',
   });
 
-  res.json({ token });
+  res.json({ token, id, email });
+});
+
+// Get User data from token
+app.get('/user', async (req, res) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
+
+  const token = authHeader.split(' ')[1];
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+
+    // Query user data based on the decoded token
+    const [rows] = await db.execute('SELECT * FROM users WHERE id = ?', [decoded.id]);
+    const user = rows[0];
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Exclude sensitive information like password_hash
+    const { id, email } = user;
+    res.json({ id, email });
+  } catch (err) {
+    res.status(401).json({ message: 'Invalid or expired token' });
+  }
 });
 
 // Start the server
