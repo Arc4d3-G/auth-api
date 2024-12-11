@@ -91,7 +91,9 @@ app.post('/register', async (req, res) => {
       text: `Click the following link to verify your account: ${verificationLink}`,
     });
 
-    res.status(201).json({ message: 'User registered successfully. Please verify your email.' });
+    res.status(201).json({
+      message: `Registration successful. A verification email has been sent to ${email}. Please verify your email before logging in.`,
+    });
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') {
       res.status(400).json({ message: 'Email already exists.' });
@@ -151,6 +153,8 @@ app.post('/login', async (req, res) => {
     expiresIn: '1h',
   });
 
+  const id = user.id;
+
   res.json({ token, id, email });
 });
 
@@ -165,7 +169,7 @@ app.get('/user', async (req, res) => {
   const token = authHeader.split(' ')[1];
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     // Query user data based on the decoded token
     const [rows] = await db.execute('SELECT * FROM users WHERE id = ?', [decoded.id]);
@@ -179,7 +183,7 @@ app.get('/user', async (req, res) => {
     const { id, email } = user;
     res.json({ id, email });
   } catch (err) {
-    res.status(401).json({ message: 'Invalid or expired token' });
+    return res.status(401).json({ message: 'Invalid or expired token' });
   }
 });
 
