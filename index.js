@@ -1,15 +1,21 @@
-import express from 'express';
-import mysql from 'mysql2/promise';
-import bcrypt from 'bcrypt';
-import dotenv from 'dotenv';
-import jwt from 'jsonwebtoken';
-import nodemailer from 'nodemailer';
-import crypto from 'crypto';
-import cors from 'cors';
+const express = require('express');
+const mysql = require('mysql2/promise');
+const bcrypt = require('bcrypt');
+const dotenv = require('dotenv');
+const jwt = require('jsonwebtoken');
+const nodemailer = require('nodemailer');
+const crypto = require('crypto');
+const cors = require('cors');
 
 dotenv.config();
 const app = express();
-app.use(cors());
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL,
+    methods: ['GET', 'POST'],
+  })
+);
+console.log(process.env.FRONTEND_URL);
 const PORT = process.env.PORT || 3000;
 app.use(express.json());
 
@@ -83,7 +89,7 @@ app.post('/register', async (req, res) => {
     );
 
     // Send verification email
-    const verificationLink = `${process.env.FRONTEND_URL}verify?token=${verificationToken}`;
+    const verificationLink = `${process.env.FRONTEND_URL}/verify?token=${verificationToken}`;
     await transporter.sendMail({
       from: process.env.SMTP_USER,
       to: email,
@@ -146,7 +152,7 @@ app.post('/login', async (req, res) => {
   const user = rows[0];
 
   if (!user || !(await bcrypt.compare(password, user.password_hash))) {
-    return res.status(401).json({ message: 'Invalid username or password.' });
+    return res.status(401).json({ message: 'Incorrect username or password.' });
   }
 
   const token = jwt.sign({ id: user.id, email: user.email }, process.env.JWT_SECRET, {
