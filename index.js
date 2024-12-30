@@ -1,3 +1,11 @@
+import express from 'express';
+import mysql from 'mysql2/promise';
+import bcrypt from 'bcrypt';
+import dotenv from 'dotenv';
+import jwt from 'jsonwebtoken';
+import nodemailer from 'nodemailer';
+import crypto from 'crypto';
+import cors from 'cors';
 // Import third-party modules
 const express = require('express');
 const mysql = require('mysql2/promise');
@@ -98,6 +106,18 @@ app.post('/register', async (req, res) => {
       [email, hashedPassword, verificationToken]
     );
 
+    // Send verification email
+    const verificationLink = `${process.env.FRONTEND_URL}verify?token=${verificationToken}`;
+    await transporter.sendMail({
+      from: process.env.SMTP_USER,
+      to: email,
+      subject: 'Verify your email',
+      text: `Click the following link to verify your account: ${verificationLink}`,
+    });
+
+    res.status(201).json({
+      message: `Registration successful. A verification email has been sent to ${email}. Please verify your email before logging in.`,
+    });
     const verificationLink = `${process.env.FRONTEND_URL}/verify?token=${verificationToken}`;
 
     const params = {
@@ -178,7 +198,7 @@ app.post('/login', async (req, res) => {
   const user = rows[0];
 
   if (!user || !(await bcrypt.compare(password, user.password_hash))) {
-    return res.status(401).json({ message: 'Incorrect username or password.' });
+    return res.status(401).json({ message: 'Invalid username or password.' });
   }
 
   const token = jwt.sign({ id: user.id, email: user.email }, process.env.JWT_SECRET, {
