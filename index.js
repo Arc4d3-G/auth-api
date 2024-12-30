@@ -6,15 +6,6 @@ import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
 import crypto from 'crypto';
 import cors from 'cors';
-// Import third-party modules
-const express = require('express');
-const mysql = require('mysql2/promise');
-const bcrypt = require('bcrypt');
-const dotenv = require('dotenv');
-const jwt = require('jsonwebtoken');
-const crypto = require('crypto');
-const cors = require('cors');
-const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
 
 // Initialize dotenv and environment variables
 dotenv.config();
@@ -53,32 +44,31 @@ async function testDbConnection() {
   }
 }
 
-// Test SES
+// Configure nodemailer
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: 587,
+  secure: false,
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+  tls: {
+    rejectUnauthorized: false,
+  },
+});
+
 async function sendTestEmail() {
   try {
-    const params = {
-      Source: '"Terminal-D" <no-reply@dewaldbreed.co.za>', // Sender's email (verified in SES)
-      Destination: {
-        ToAddresses: ['dewaldbreed@gmail.com'], // Recipient's email
-      },
-      Message: {
-        Subject: {
-          Data: 'Test Email',
-        },
-        Body: {
-          Text: {
-            Data: 'This is a test email from your SES configuration.',
-          },
-          Html: {
-            Data: '<p>This is a test email from your SES configuration.</p>',
-          },
-        },
-      },
-    };
+    const info = await transporter.sendMail({
+      from: '"Terminal-D" <yno-reply@dewaldbreed.co.za>', // Sender's email address
+      to: 'dewaldbreed@gmail.com', // Replace with recipient's email
+      subject: 'Test Email',
+      text: 'This is a test email from your SMTP configuration.',
+      html: '<p>This is a test email from your SMTP configuration.</p>',
+    });
 
-    const sendEmailCommand = new SendEmailCommand(params);
-    const result = await ses.send(sendEmailCommand);
-    console.log('Test email sent successfully:', result.MessageId);
+    console.log('Test email sent successfully:', info.messageId);
   } catch (error) {
     console.error('Error sending test email:', error);
   }
@@ -107,7 +97,7 @@ app.post('/register', async (req, res) => {
     );
 
     // Send verification email
-    const verificationLink = `${process.env.FRONTEND_URL}verify?token=${verificationToken}`;
+    const verificationLink = `${process.env.FRONTEND_URL}/verify?token=${verificationToken}`;
     await transporter.sendMail({
       from: process.env.SMTP_USER,
       to: email,
@@ -118,30 +108,8 @@ app.post('/register', async (req, res) => {
     res.status(201).json({
       message: `Registration successful. A verification email has been sent to ${email}. Please verify your email before logging in.`,
     });
-    const verificationLink = `${process.env.FRONTEND_URL}/verify?token=${verificationToken}`;
 
-    const params = {
-      Source: process.env.SMTP_USER, // Your verified email in SES
-      Destination: {
-        ToAddresses: [email], // Recipient's email
-      },
-      Message: {
-        Subject: {
-          Data: 'Verify your email',
-        },
-        Body: {
-          Text: {
-            Data: `Click the following link to verify your account: ${verificationLink}`,
-          },
-        },
-      },
-    };
-
-    // Use SendEmailCommand with the SES client
-    const sendEmailCommand = new SendEmailCommand(params);
-    const result = await ses.send(sendEmailCommand); // Sending the email
-
-    console.log('Verification email sent successfully:', result.MessageId);
+    console.log('Verification email sent successfully:');
   } catch (error) {
     console.error('Error during registration:', error);
 
