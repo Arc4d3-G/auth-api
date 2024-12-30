@@ -20,9 +20,6 @@ app.use(
 );
 app.use(express.json());
 
-// Set up SES Client
-const ses = new SESClient({ region: 'af-south-1' });
-
 // Set up a database connection pool
 const db = mysql.createPool({
   host: process.env.DB_HOST,
@@ -58,10 +55,11 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+// test SMTP
 async function sendTestEmail() {
   try {
     const info = await transporter.sendMail({
-      from: '"Terminal-D" <yno-reply@dewaldbreed.co.za>', // Sender's email address
+      from: '"Terminal-D" <noreply@dewaldbreed.co.za>', // Sender's email address
       to: 'dewaldbreed@gmail.com', // Replace with recipient's email
       subject: 'Test Email',
       text: 'This is a test email from your SMTP configuration.',
@@ -118,7 +116,7 @@ app.post('/register', async (req, res) => {
       return res.status(400).json({ message: 'Email already exists.' });
     }
 
-    // Handle SES or other internal errors
+    // Handle SMTP or other internal errors
     res.status(500).json({ message: 'Internal server error. Please try again later.' });
   }
 });
@@ -213,7 +211,8 @@ app.get('/user', async (req, res) => {
 async function startServer() {
   await testDbConnection();
 
-  // sendTestEmail();
+  sendTestEmail();
+
   app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
   });
