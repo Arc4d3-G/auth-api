@@ -214,8 +214,9 @@ async function startServer() {
   await testDbConnection();
 
   sendTestEmail();
-  app.listen(() => {
-    console.log(`Server running on port ${PORT}`);
+
+  app.listen(3000, '0.0.0.0', () => {
+    console.log('Server running on port 3000');
   });
 }
 
