@@ -12,12 +12,14 @@ dotenv.config();
 
 // Initialize Express and other configurations
 const app = express();
-app.use(
-  cors({
-    origin: process.env.FRONTEND_URL,
-    methods: ['GET', 'POST'],
-  })
-);
+
+const corsOptions = {
+  origin: /\.dewaldbreed\.co\.za$/, // Regex to match all subdomains
+  credentials: true,
+};
+
+app.use(cors(corsOptions));
+
 app.use(express.json());
 
 // Set up a database connection pool
