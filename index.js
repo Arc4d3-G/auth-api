@@ -211,6 +211,11 @@ app.get('/user', async (req, res) => {
   }
 });
 
+// Health Check
+app.get('/health', (req, res) => {
+  res.status(200).send('Healthy');
+});
+
 // #endregion
 
 // Start the server
