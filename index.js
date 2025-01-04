@@ -14,11 +14,15 @@ dotenv.config();
 const app = express();
 
 const corsOptions = {
-  origin: /\.dewaldbreed\.co\.za$/, // Regex to match all subdomains
+  origin: 'https://terminal.dewaldbreed.co.za',
   credentials: true,
 };
 
+// Use the cors middleware with the options
 app.use(cors(corsOptions));
+
+// Handle preflight (OPTIONS) requests
+app.options('*', cors(corsOptions));
 
 app.use(express.json());
 
