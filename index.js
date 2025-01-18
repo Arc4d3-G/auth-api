@@ -6,25 +6,29 @@ import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
 import crypto from 'crypto';
 import cors from 'cors';
+import path from 'path';
 
 // Initialize dotenv and environment variables
 dotenv.config();
 
-// Initialize Express and other configurations
+// Initialize Express and cors
 const app = express();
 
 const corsOptions = {
-  origin: 'https://terminal.dewaldbreed.co.za',
+  origin: process.env.FRONTEND_URL,
   credentials: true,
 };
 
-// Use the cors middleware with the options
 app.use(cors(corsOptions));
 
 // Handle preflight (OPTIONS) requests
 app.options('*', cors(corsOptions));
 
 app.use(express.json());
+
+// View engine for response pages
+app.set('view engine', 'ejs');
+app.set('views', path.join('views'));
 
 // Set up a database connection pool
 const db = mysql.createPool({
@@ -101,7 +105,7 @@ app.post('/register', async (req, res) => {
     );
 
     // Send verification email
-    const verificationLink = `${process.env.FRONTEND_URL}/verify?token=${verificationToken}`;
+    const verificationLink = `${process.env.API_URL}/verify?token=${verificationToken}`;
     await transporter.sendMail({
       from: process.env.SMTP_USER,
       to: email,
@@ -132,7 +136,7 @@ app.get('/verify', async (req, res) => {
   const { token } = req.query;
 
   if (!token) {
-    return res.status(400).json({ message: 'Verification token is required.' });
+    return res.status(400).render('error', { message: 'Verification token is required.' });
   }
 
   try {
@@ -143,7 +147,7 @@ app.get('/verify', async (req, res) => {
     );
 
     if (result.length === 0) {
-      return res.status(400).json({ message: 'Invalid or expired verification token.' });
+      return res.status(400).render('error', { message: 'Invalid or expired verification token.' });
     }
 
     // Update the user's status to verified
@@ -151,10 +155,12 @@ app.get('/verify', async (req, res) => {
       result[0].id,
     ]);
 
-    res.status(200).json({ message: 'Email verified successfully. You can now log in.' });
+    res
+      .status(200)
+      .render('success', { message: 'Email verified successfully. You can now log in.' });
   } catch (error) {
     console.error('Verification error:', error);
-    res.status(500).json({ message: 'Internal server error.' });
+    res.status(500).render('error', { message: 'Internal server error.' });
   }
 });
 
@@ -222,7 +228,7 @@ app.get('/health', (req, res) => {
 async function startServer() {
   await testDbConnection();
 
-  sendTestEmail();
+  // sendTestEmail();
 
   app.listen(3000, '0.0.0.0', () => {
     console.log('Server running on port 3000');
