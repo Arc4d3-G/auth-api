@@ -15,7 +15,7 @@ dotenv.config();
 const app = express();
 
 const corsOptions = {
-  origin: process.env.FRONTEND_URL,
+  origin: JSON.parse(process.env.FRONTEND_URL),
   credentials: true,
 };
 
@@ -83,22 +83,32 @@ async function sendTestEmail() {
 }
 // #region FUNCTIONS
 
-// Register new user
+// Register
 app.post('/register', async (req, res) => {
   const { email, password } = req.body;
 
+  // Validate inputs
   if (!email || !password) {
-    return res.status(400).json({ message: 'Email and password are required.' });
+    return res.status(400).json({
+      success: false,
+      data: null,
+      error: { message: 'Email and password are required.' },
+    });
   }
 
   if (password.length < 8) {
-    return res.status(400).json({ message: 'Password must be at least 8 characters long.' });
+    return res.status(400).json({
+      success: false,
+      data: null,
+      error: { message: 'Password must be at least 8 characters long.' },
+    });
   }
 
   const hashedPassword = await bcrypt.hash(password, 10);
   const verificationToken = crypto.randomBytes(32).toString('hex');
 
   try {
+    // Insert new user into the database
     await db.execute(
       'INSERT INTO users (email, password_hash, verification_token) VALUES (?, ?, ?)',
       [email, hashedPassword, verificationToken]
@@ -113,21 +123,31 @@ app.post('/register', async (req, res) => {
       text: `Click the following link to verify your account: ${verificationLink}`,
     });
 
-    res.status(201).json({
-      message: `Registration successful. A verification email has been sent to ${email}. Please verify your email before logging in.`,
+    return res.status(201).json({
+      success: true,
+      data: {
+        message: `Registration successful. A verification email has been sent to ${email}. Please verify your email before logging in.`,
+      },
+      error: null,
     });
-
-    console.log('Verification email sent successfully:');
   } catch (error) {
     console.error('Error during registration:', error);
 
     // Handle duplicate email error
     if (error.code === 'ER_DUP_ENTRY') {
-      return res.status(400).json({ message: 'Email already exists.' });
+      return res.status(400).json({
+        success: false,
+        data: null,
+        error: { message: 'Email already exists.' },
+      });
     }
 
     // Handle SMTP or other internal errors
-    res.status(500).json({ message: 'Internal server error. Please try again later.' });
+    return res.status(500).json({
+      success: false,
+      data: null,
+      error: { message: 'Internal server error. Please try again later.' },
+    });
   }
 });
 
@@ -164,56 +184,99 @@ app.get('/verify', async (req, res) => {
   }
 });
 
-// Login existing user
+// Login
 app.post('/login', async (req, res) => {
   const { email, password } = req.body;
 
+  // Check for missing fields
   if (!email || !password) {
-    return res.status(400).json({ message: 'Both Email and password are required.' });
+    return res.status(400).json({
+      success: false,
+      data: null,
+      error: { message: 'Both Email and password are required.' },
+    });
   }
 
-  const [rows] = await db.execute('SELECT * FROM users WHERE email = ?', [email]);
-  const user = rows[0];
+  try {
+    // Query the user from the database
+    const [rows] = await db.execute('SELECT * FROM users WHERE email = ?', [email]);
+    const user = rows[0];
 
-  if (!user || !(await bcrypt.compare(password, user.password_hash))) {
-    return res.status(401).json({ message: 'Invalid username or password.' });
+    // Check if user exists and the password is correct
+    if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+      return res.status(401).json({
+        success: false,
+        data: null,
+        error: { message: 'Invalid username or password.' },
+      });
+    }
+
+    // Generate a JWT token
+    const token = jwt.sign({ id: user.id, email: user.email }, process.env.JWT_SECRET, {
+      expiresIn: '1h',
+    });
+
+    // Respond with user details and token
+    return res.json({
+      success: true,
+      data: { token, id: user.id, email: user.email },
+      error: null,
+    });
+  } catch (error) {
+    // Handle unexpected server errors
+    console.error('Login error:', error);
+    return res.status(500).json({
+      success: false,
+      data: null,
+      error: { message: 'An internal server error occurred.' },
+    });
   }
-
-  const token = jwt.sign({ id: user.id, email: user.email }, process.env.JWT_SECRET, {
-    expiresIn: '1h',
-  });
-
-  const id = user.id;
-
-  res.json({ token, id, email });
 });
 
 // Get User data from token
 app.get('/user', async (req, res) => {
   const authHeader = req.headers.authorization;
 
+  // Check for missing or improperly formatted authorization header
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ message: 'Unauthorized' });
+    return res.status(401).json({
+      success: false,
+      data: null,
+      error: { message: 'Unauthorized. Bearer token is required.' },
+    });
   }
 
   const token = authHeader.split(' ')[1];
 
   try {
+    // Verify the token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     // Query user data based on the decoded token
-    const [rows] = await db.execute('SELECT * FROM users WHERE id = ?', [decoded.id]);
+    const [rows] = await db.execute('SELECT id, email FROM users WHERE id = ?', [decoded.id]);
     const user = rows[0];
 
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      return res.status(404).json({
+        success: false,
+        data: null,
+        error: { message: 'User not found.' },
+      });
     }
 
-    // Exclude sensitive information like password_hash
-    const { id, email } = user;
-    res.json({ id, email });
+    // Return user data
+    return res.status(200).json({
+      success: true,
+      data: { id: user.id, email: user.email },
+      error: null,
+    });
   } catch (err) {
-    return res.status(401).json({ message: 'Invalid or expired token' });
+    // Handle invalid or expired token errors
+    return res.status(401).json({
+      success: false,
+      data: null,
+      error: { message: 'Invalid or expired token.' },
+    });
   }
 });
 
